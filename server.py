@@ -20,7 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 # ── Gemini Setup ──────────────────────────────────────────────────────────────
-GEMINI_API_KEY = "AIzaSyCfEXWbUIujhKtW9K1oKX1_dkQR3dKSW3o"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCfEXWbUIujhKtW9K1oKX1_dkQR3dKSW3o")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
@@ -72,10 +72,15 @@ def optimize():
     csp    = BijliDostCSP(appliances_input, units_consumed, days_remaining)
     result = csp.solve(restarts=8)
 
+   # ── Get quantities sent from app ──────────────────────────────────────────
+    quantities = body.get("quantities", {})
+
     schedule_detail = []
     for key, ai_hours in result["schedule"].items():
         user_pref = appliances_input[key]
         daily_kwh = round(calculate_daily_units(key, ai_hours), 3)
+        qty       = int(quantities.get(key, 1))
+
         if ai_hours < user_pref:
             change = f"Reduced by {user_pref - ai_hours:.1f}h"
         elif ai_hours > user_pref:
@@ -83,15 +88,57 @@ def optimize():
         else:
             change = "Kept as preferred"
 
-        schedule_detail.append({
-            "key"      : key,
-            "name"     : key.replace("_", " ").title(),
-            "user_pref": user_pref,
-            "ai_hours" : ai_hours,
-            "change"   : change,
-            "daily_kwh": daily_kwh,
-        })
+        # ── Smart per-unit ON/OFF breakdown ───────────────────────────────────
+        unit_schedule = []
+        if qty > 1:
+            # hours_per_unit = what user wanted per single unit
+            hours_per_unit = user_pref / qty
 
+            # How many units can we fully run within ai_hours budget?
+            units_on  = min(qty, int(ai_hours // hours_per_unit)) if hours_per_unit > 0 else 0
+            remainder = round(ai_hours - (units_on * hours_per_unit), 1)
+
+            for i in range(qty):
+                if i < units_on:
+                    # Full hours for this unit
+                    unit_schedule.append({
+                        "unit"  : i + 1,
+                        "hours" : hours_per_unit,
+                        "on"    : True,
+                    })
+                elif i == units_on and remainder > 0:
+                    # Partial hours for one unit if remainder exists
+                    unit_schedule.append({
+                        "unit"  : i + 1,
+                        "hours" : remainder,
+                        "on"    : True,
+                    })
+                else:
+                    # This unit is OFF
+                    unit_schedule.append({
+                        "unit"  : i + 1,
+                        "hours" : 0,
+                        "on"    : False,
+                    })
+        else:
+            # Single unit — simple on/off
+            unit_schedule.append({
+                "unit"  : 1,
+                "hours" : ai_hours,
+                "on"    : ai_hours > 0,
+            })
+
+        schedule_detail.append({
+            "key"          : key,
+            "name"         : key.replace("_", " ").title(),
+            "user_pref"    : user_pref,
+            "ai_hours"     : ai_hours,
+            "change"       : change,
+            "daily_kwh"    : daily_kwh,
+            "qty"          : qty,
+            "unit_schedule": unit_schedule,
+        })
+        
     return jsonify({
         "schedule"     : schedule_detail,
         "total_units"  : result["total_units"],
