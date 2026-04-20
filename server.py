@@ -20,7 +20,7 @@ app = Flask(__name__)
 CORS(app)
 
 # ── Gemini Setup ──────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyCfEXWbUIujhKtW9K1oKX1_dkQR3dKSW3o")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAWl3zk9diUN9ncz2TRxs3vBOtR82Ioh7o")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
@@ -138,7 +138,7 @@ def optimize():
             "qty"          : qty,
             "unit_schedule": unit_schedule,
         })
-        
+
     return jsonify({
         "schedule"     : schedule_detail,
         "total_units"  : result["total_units"],
