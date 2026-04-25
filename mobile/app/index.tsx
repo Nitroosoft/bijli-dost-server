@@ -10,6 +10,7 @@ import HomeScreen        from '../screens/HomeScreen';
 import ApplianceScreen   from '../screens/ApplianceScreen';
 import ResultScreen      from '../screens/ResultScreen';
 import BillScannerScreen from '../screens/BillScannerScreen';
+import ProfileScreen     from '../screens/ProfileScreen';
 
 const Stack = createStackNavigator();
 
@@ -55,39 +56,49 @@ export default function Index() {
           cardStyle       : { backgroundColor: '#0a0a0f' },
         }}
       >
-        <Stack.Screen name="Auth" component={AuthScreen}
-          options={{ headerShown: false }} />
-
-        <Stack.Screen name="Home" component={HomeScreen}
-          initialParams={{ userName }}
-          options={({ route }: any) => ({
-            title: '⚡ Bijli-Dost',
-            headerRight: () => (
-              <TouchableOpacity
-                onPress={() => route.params?.onToggleLanguage?.()}
-                style={{
-                  marginRight: 16,
-                  backgroundColor: '#00d4ff12',
-                  borderWidth: 1,
-                  borderColor: '#00d4ff33',
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                  paddingVertical: 6,
-                }}>
-                <Text style={{ color: '#00d4ff', fontWeight: '700', fontSize: 12 }}>
-                  🌐 ENG / اُردُو / پښتو
-                </Text>
-              </TouchableOpacity>
-            ),
-          })}
+        {/* ── Auth Screen ── */}
+        <Stack.Screen
+          name="Auth"
+          component={AuthScreen}
+          options={{ headerShown: false }}
         />
 
-        <Stack.Screen name="Appliances" component={ApplianceScreen}
-          options={{ title: '🏠 Appliances' }} />
-        <Stack.Screen name="Result" component={ResultScreen}
-          options={{ title: '🎯 AI Schedule' }} />
-        <Stack.Screen name="BillScanner" component={BillScannerScreen}
-          options={{ title: '📸 Bill Scanner' }} />
+        {/* ── Home Screen ── */}
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+          initialParams={{ userName }}
+          options={{ title: '⚡ Bijli-Dost' }}
+        />
+
+        {/* ── Appliances Screen ── */}
+        <Stack.Screen
+          name="Appliances"
+          component={ApplianceScreen}
+          options={{ title: '🏠 Appliances' }}
+        />
+
+        {/* ── Result Screen ── */}
+        <Stack.Screen
+          name="Result"
+          component={ResultScreen}
+          options={{ title: '🎯 AI Schedule' }}
+        />
+
+        {/* ── Bill Scanner Screen ── */}
+        <Stack.Screen
+          name="BillScanner"
+          component={BillScannerScreen}
+          options={{ title: '📸 Bill Scanner' }}
+        />
+
+        {/* ── Profile Screen ── */}
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{ title: '👤 Profile' }}
+        />
+
       </Stack.Navigator>
     </LanguageProvider>
   );

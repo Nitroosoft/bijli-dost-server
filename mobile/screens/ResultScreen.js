@@ -13,7 +13,8 @@ const PROTECTED_SLAB = 199;
 
 export default function ResultScreen({ route, navigation }) {
   const { t } = useLanguage();
-  const { result, unitsConsumed, daysRemaining, discoCompany } = route.params;
+  // Extracting all necessary data passed from ApplianceScreen
+ const { result, unitsConsumed, daysRemaining, discoCompany } = route.params;
 
   const getWarning = (level) => {
     const map = {
@@ -140,25 +141,76 @@ export default function ResultScreen({ route, navigation }) {
         </View>
       </View>
 
+      {/* ── NEW ONE ── */}
       {/* ── OPTIMIZED SCHEDULE ── */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>📋 Optimized Schedule</Text>
         {result.schedule.map((item) => {
           const reduced = item.change.startsWith('Reduced');
+          const hasQty  = item.qty > 1;
+
           return (
-            <View key={item.key} style={styles.scheduleRow}>
-              <View style={styles.scheduleLeft}>
-                <Text style={styles.scheduleName}>{item.name}</Text>
-                <Text style={styles.scheduleKwh}>{item.daily_kwh} kWh/day</Text>
+            <View key={item.key} style={styles.scheduleItem}>
+
+              {/* ── Main Row ── */}
+              <View style={styles.scheduleRow}>
+                <View style={styles.scheduleLeft}>
+                  <View style={styles.scheduleNameRow}>
+                    <Text style={styles.scheduleName}>{item.name}</Text>
+                    {hasQty && (
+                      <View style={styles.qtyBadge}>
+                        <Text style={styles.qtyBadgeText}>×{item.qty}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.scheduleKwh}>{item.daily_kwh} kWh/day</Text>
+                </View>
+                <View style={styles.scheduleRight}>
+                  <Text style={styles.schedulePreferred}>{item.user_pref}h →</Text>
+                  {reduced ? (
+                    <Text style={styles.scheduleReduced}>↓ {item.ai_hours}h</Text>
+                  ) : (
+                    <Text style={styles.scheduleKept}>✓ {item.ai_hours}h</Text>
+                  )}
+                </View>
               </View>
-              <View style={styles.scheduleRight}>
-                <Text style={styles.schedulePreferred}>{item.user_pref}h →</Text>
-                {reduced ? (
-                  <Text style={styles.scheduleReduced}>↓ {item.ai_hours}h</Text>
-                ) : (
-                  <Text style={styles.scheduleKept}>✓ {item.ai_hours}h</Text>
-                )}
-              </View>
+
+              {/* ── Per Unit Breakdown ── */}
+              {hasQty && item.unit_schedule && (
+                <View style={styles.unitBreakdown}>
+                  {item.unit_schedule.map((u) => (
+                    <View key={u.unit} style={styles.unitRow}>
+
+                      {/* Unit Label */}
+                      <Text style={styles.unitLabel}>Unit {u.unit}</Text>
+
+                      {/* Progress Bar */}
+                      <View style={styles.unitBarWrap}>
+                        <View style={[styles.unitBarFill, {
+                          width          : u.on
+                            ? `${Math.min((u.hours / 24) * 100, 100)}%`
+                            : '0%',
+                          backgroundColor: u.on ? '#00d4ff' : '#1f2937',
+                        }]} />
+                      </View>
+
+                      {/* Hours */}
+                      <Text style={[styles.unitHours, {
+                        color: u.on ? '#ffffff' : '#374151'
+                      }]}>
+                        {u.on ? `${u.hours}h` : '0h'}
+                      </Text>
+
+                      {/* Status */}
+                      <Text style={styles.unitStatus}>
+                        {u.on ? '✅' : '❌'}
+                      </Text>
+
+                    </View>
+                  ))}
+                </View>
+              )}
+
             </View>
           );
         })}
@@ -298,8 +350,7 @@ const styles = StyleSheet.create({
                         marginBottom: 16 },
 
   scheduleRow:        { flexDirection: 'row', justifyContent: 'space-between',
-                        alignItems: 'center', paddingVertical: 12,
-                        borderBottomWidth: 1, borderBottomColor: '#1a2332' },
+                        alignItems: 'center', paddingVertical: 12 },
   scheduleLeft:       { flex: 1 },
   scheduleName:       { fontSize: 14, fontWeight: '700', color: '#ffffff' },
   scheduleKwh:        { fontSize: 12, color: '#6b7280', marginTop: 2 },
@@ -364,4 +415,23 @@ const styles = StyleSheet.create({
   savingsAmount:      { fontSize: 18, fontWeight: '800', color: '#4ade80' },
   billNote:           { fontSize: 11, color: '#374151', textAlign: 'center',
                         lineHeight: 16 },
+  scheduleItem:       { borderBottomWidth: 1, borderBottomColor: '#1a2332' },
+  scheduleNameRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  qtyBadge:           { backgroundColor: '#00d4ff22', borderWidth: 1,
+                        borderColor: '#00d4ff44', borderRadius: 6,
+                        paddingHorizontal: 6, paddingVertical: 2 },
+  qtyBadgeText:       { color: '#00d4ff', fontSize: 11, fontWeight: '800' },
+
+  unitBreakdown:      { backgroundColor: '#0a1220', borderRadius: 12,
+                        padding: 12, marginBottom: 12, gap: 8 },
+  unitRow:            { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  unitLabel:          { fontSize: 12, color: '#6b7280', fontWeight: '600',
+                        width: 45 },
+  unitBarWrap:        { flex: 1, backgroundColor: '#1f2937', borderRadius: 999,
+                        height: 6, overflow: 'hidden' },
+  unitBarFill:        { height: '100%', borderRadius: 999 },
+  unitHours:          { fontSize: 12, fontWeight: '700', width: 32,
+                        textAlign: 'right' },
+  unitStatus:         { fontSize: 14, width: 24, textAlign: 'center' },
+  
 });

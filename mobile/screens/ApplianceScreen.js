@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert
+  ScrollView, ActivityIndicator
 } from 'react-native';
+import CustomAlert from '../components/CustomAlert';
 import Slider from '@react-native-community/slider';
 import axios from 'axios';
 import { useLanguage } from '../LanguageContext';
 
-const SERVER_IP = '172.20.0.173';
-const API_URL   = `http://${SERVER_IP}:5000`;
+const API_URL = 'https://web-production-37b3b.up.railway.app';
 
 const GROUPS = {
   '❄️ Cooling & Heating': ['ac 1 ton','ac 1 5 ton','ac 2 ton','ceiling fan','pedestal fan','cooler'],
@@ -20,38 +20,66 @@ const GROUPS = {
 
 export default function ApplianceScreen({ route, navigation }) {
   const { t } = useLanguage();
-  const { unitsConsumed, daysRemaining, discoCompany } = route.params;
+  const { unitsConsumed, daysRemaining, discoCompany } = route.params || {};
 
   const [appliances, setAppliances] = useState([]);
   const [selected,   setSelected]   = useState({});
+  {/* Adding this for quantity selection */}
+  const [quantities, setQuantities] = useState({});
   const [loading,    setLoading]     = useState(true);
   const [optimizing, setOptimizing] = useState(false);
   const [expanded,   setExpanded]   = useState({ '❄️ Cooling & Heating': true });
+  const [alertConfig, setAlertConfig] = useState({
+    visible : false,
+    type    : 'info',
+    title   : '',
+    message : '',
+    buttons : [{ text: 'OK' }],
+  });
+
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
+  const hideAlert = () => {
+    setAlertConfig(prev => ({ ...prev, visible: false }));
+  };
 
   useEffect(() => {
     axios.get(`${API_URL}/appliances`)
       .then(res => { setAppliances(res.data.appliances); setLoading(false); })
       .catch(() => {
-        Alert.alert('Connection Error',
-          `Cannot connect to server at ${SERVER_IP}:5000\nMake sure server.py is running!`);
+        showAlert('error', 'Connection Error',
+          'Cannot connect to server. Please check your internet connection.');
         setLoading(false);
       });
   }, []);
 
+  {/* Adding this for quantity selection */}
   const toggleAppliance = (key, minHours, maxHours) => {
     setSelected(prev => {
       if (prev[key] !== undefined) {
         const updated = { ...prev };
         delete updated[key];
+        setQuantities(q => { const u = { ...q }; delete u[key]; return u; });
         return updated;
       }
       const defaultHours = minHours === 0 ? Math.min(4, maxHours) : minHours;
+      setQuantities(q => ({ ...q, [key]: 1 }));
       return { ...prev, [key]: defaultHours };
     });
   };
 
+  {/* Adding this for quantity selection */}
   const updateHours = (key, value) => {
     setSelected(prev => ({ ...prev, [key]: value }));
+  };
+
+  const updateQuantity = (key, delta) => {
+    setQuantities(prev => {
+      const current = prev[key] || 1;
+      const next = Math.max(1, Math.min(10, current + delta));
+      return { ...prev, [key]: next };
+    });
   };
 
   const toggleGroup = (group) => {
@@ -60,25 +88,36 @@ export default function ApplianceScreen({ route, navigation }) {
 
   const handleOptimize = async () => {
     if (Object.keys(selected).length === 0) {
-      Alert.alert('No Appliances', t.applianceNone);
+      showAlert('warning', 'No Appliances', t.applianceNone);
       return;
     }
     setOptimizing(true);
     try {
-      const res = await axios.post(`${API_URL}/optimize`, {
-        units_consumed: unitsConsumed,
-        days_remaining: daysRemaining,
-        appliances    : selected,
+      // Multiply hours by quantity for accurate AI calculation
+      const adjustedAppliances = {};
+      Object.keys(selected).forEach(key => {
+        const qty = quantities[key] || 1;
+        adjustedAppliances[key] = selected[key] * qty;
       });
+
+      const res = await axios.post(`${API_URL}/optimize`, {
+        units_consumed: parseFloat(unitsConsumed) || 0,
+        days_remaining: parseInt(daysRemaining)   || 15,
+        appliances    : adjustedAppliances,
+        quantities    : quantities,
+      });
+
+      // Navigate to Result screen with AI response and original data
       navigation.navigate('Result', {
         result       : res.data,
         unitsConsumed,
         daysRemaining,
         discoCompany,
         selected,
+        quantities,
       });
-    } catch (err) {
-      Alert.alert('Error', err.response?.data?.error || 'Something went wrong.');
+   } catch (err) {
+      showAlert('error', 'Error', err.response?.data?.error || 'Something went wrong.');
     }
     setOptimizing(false);
   };
@@ -94,7 +133,6 @@ export default function ApplianceScreen({ route, navigation }) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#00d4ff" />
-        <Text style={styles.loadingText}>Loading appliances...</Text>
       </View>
     );
   }
@@ -111,7 +149,7 @@ export default function ApplianceScreen({ route, navigation }) {
             <View style={styles.discoBadge}>
               <Text style={styles.discoBadgeText}>{discoCompany.id}</Text>
             </View>
-            <Text style={styles.discoName}>{discoCompany.name}</Text>
+            <Text style={styles.discoName}>{discoCompany.city} · {discoCompany.region}</Text>
           </View>
         )}
       </View>
@@ -137,8 +175,9 @@ export default function ApplianceScreen({ route, navigation }) {
             {isExpanded && groupAppliances.map(app => {
               const isSelected = selected[app.key] !== undefined;
               const hours      = selected[app.key] ?? app.min_hours;
-              const dailyKwh   = ((app.watts * hours) / 1000).toFixed(2);
-
+              {/* Adding this for quantity selection */}
+              const qty        = quantities[app.key] || 1;
+              const dailyKwh   = ((app.watts * hours * qty) / 1000).toFixed(2);
               return (
                 <View key={app.key} style={styles.appItem}>
 
@@ -162,9 +201,32 @@ export default function ApplianceScreen({ route, navigation }) {
                     )}
                   </TouchableOpacity>
 
-                  {/* Slider — only when selected */}
+                  {/* Quantity + Slider — only when selected */}
                   {isSelected && (
                     <View style={styles.sliderWrap}>
+
+                      {/* Quantity Row */}
+                      <View style={styles.qtyRow}>
+                        <Text style={styles.qtyLabel}>Quantity:</Text>
+                        <View style={styles.qtyControls}>
+                          <TouchableOpacity
+                            style={styles.qtyBtn}
+                            onPress={() => updateQuantity(app.key, -1)}>
+                            <Text style={styles.qtyBtnText}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.qtyVal}>{qty}</Text>
+                          <TouchableOpacity
+                            style={styles.qtyBtn}
+                            onPress={() => updateQuantity(app.key, +1)}>
+                            <Text style={styles.qtyBtnText}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={styles.qtyTotal}>
+                          {(app.watts * qty / 1000).toFixed(2)} kW total
+                        </Text>
+                      </View>
+
+                      {/* Slider Row */}
                       <View style={styles.sliderRow}>
                         <Text style={styles.sliderLabel}>
                           {t.applianceMin}: {app.min_hours}h
@@ -215,6 +277,15 @@ export default function ApplianceScreen({ route, navigation }) {
 
       <Text style={styles.copyright}>© 2026 Bijli-Dost · v1.0.0 · Pakistan</Text>
       <Text style={styles.copyright}>by NITROSOFT</Text>
+
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={hideAlert}
+      />
 
     </ScrollView>
   );
@@ -282,4 +353,19 @@ const styles = StyleSheet.create({
 
   copyright:         { textAlign: 'center', color: '#1f2937',
                        fontSize: 11, marginBottom: 4 },
+
+  qtyRow:      { flexDirection: 'row', alignItems: 'center',
+                 gap: 10, marginBottom: 12,
+                 paddingTop: 10, borderTopWidth: 1,
+                 borderTopColor: '#1a2332' },
+  qtyLabel:    { fontSize: 12, color: '#6b7280', fontWeight: '600', flex: 1 },
+  qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  qtyBtn:      { width: 30, height: 30, borderRadius: 8,
+                 backgroundColor: '#00d4ff22', borderWidth: 1,
+                 borderColor: '#00d4ff44', alignItems: 'center',
+                 justifyContent: 'center' },
+  qtyBtnText:  { color: '#00d4ff', fontWeight: '800', fontSize: 18 },
+  qtyVal:      { fontSize: 18, fontWeight: '800', color: '#ffffff',
+                 minWidth: 30, textAlign: 'center' },
+  qtyTotal:    { fontSize: 11, color: '#4b5563', fontWeight: '600' },
 });

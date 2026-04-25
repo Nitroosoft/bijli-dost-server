@@ -376,8 +376,7 @@ with st.sidebar:
     st.markdown(f"**Status:** {get_status_emoji(warning_now)} `{warning_now}`")
 
     st.markdown("---")
-    st.caption("Bijli-Dost · Knight Riders · FAST-NUCES · 4th Semester")
-
+    st.caption("Bijli-Dost · NITROSOFT · 2026")
 
 # =============================================================================
 # SECTION 6: MAIN CONTENT — APPLIANCE SELECTION
@@ -637,7 +636,7 @@ else:
 st.markdown("""
 <div class="footer">
     ⚡ Bijli-Dost — AI Electricity Slab Scheduler &nbsp;|&nbsp;
-    Knight Riders &nbsp;|&nbsp; FAST-NUCES &nbsp;|&nbsp; 4th Semester &nbsp;|&nbsp;
+    NITROSOFT &nbsp;|&nbsp; 2026 &nbsp;|&nbsp;
     Powered by CSP + Hill Climbing AI
 </div>
 """, unsafe_allow_html=True)

@@ -1,7 +1,6 @@
-import { Stack } from 'expo-router';
+import { NavigationContainer } from '@react-navigation/native';
+import Index from './index';
 
 export default function RootLayout() {
-  return (
-    <Stack screenOptions={{ headerShown: false }} />
-  );
+  return <Index />;
 }

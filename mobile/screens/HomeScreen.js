@@ -1,11 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import CustomAlert from '../components/CustomAlert';
+import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import { useLanguage } from '../LanguageContext';
 import * as SecureStore from 'expo-secure-store';
 import { BlurView } from 'expo-blur';
 
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, Alert, Modal
+  StyleSheet, ScrollView, Modal, ActivityIndicator, Image
 } from 'react-native';
 
 const PROTECTED_SLAB = 199;
@@ -24,16 +27,154 @@ const DISCO_COMPANIES = [
   { id: 'KELECTRIC', name: 'K-Electric', city: 'Karachi', region: 'Sindh' },
 ];
 
+function CircularGauge({ percentage, color }) {
+  const size = 160;
+  const strokeWidth = 14;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progress = circumference - (percentage / 100) * circumference;
+
+  return (
+    <Svg width={size} height={size}>
+      {/* Background circle */}
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke="#1f2937"
+        strokeWidth={strokeWidth}
+        fill="none"
+      />
+      {/* Progress circle */}
+      <Circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        stroke={color}
+        strokeWidth={strokeWidth}
+        fill="none"
+        strokeDasharray={circumference}
+        strokeDashoffset={progress}
+        strokeLinecap="round"
+        rotation="-90"
+        origin={`${size / 2}, ${size / 2}`}
+      />
+      {/* Percentage text */}
+      <SvgText
+        x={size / 2}
+        y={size / 2 - 8}
+        textAnchor="middle"
+        fill={color}
+        fontSize="26"
+        fontWeight="800"
+      >
+        {percentage.toFixed(0)}%
+      </SvgText>
+      {/* Label text */}
+      <SvgText
+        x={size / 2}
+        y={size / 2 + 16}
+        textAnchor="middle"
+        fill="#6b7280"
+        fontSize="11"
+        fontWeight="600"
+      >
+        of 199 limit
+      </SvgText>
+    </Svg>
+  );
+}
+
+function HeaderRight({ navigation, language, toggleLanguage }) {
+  const [photo, setPhoto] = useState(null);
+  const [initial, setInitial] = useState('👤');
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const load = async () => {
+        try {
+          const p = await SecureStore.getItemAsync('bd_profile_photo');
+          const n = await SecureStore.getItemAsync('bd_username');
+          setPhoto(p || null);
+          setInitial(n ? n[0].toUpperCase() : '👤');
+        } catch (_) {}
+      };
+      load();
+    }, [])
+  );
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: 12 }}>
+      <TouchableOpacity
+        onPress={toggleLanguage}
+        style={{
+          backgroundColor: '#00d4ff12',
+          borderWidth: 1,
+          borderColor: '#00d4ff33',
+          borderRadius: 10,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+        }}>
+        <Text style={{ color: '#00d4ff', fontSize: 12, fontWeight: '700' }}>
+          🌐 {language === 'en' ? 'ENG / اُردُو / پښتو' :
+              language === 'ur' ? 'اُردُو / ENG / پښتو' :
+              'پښتو / ENG / اُردُو'}
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Profile')}
+        style={{
+          width: 36, height: 36, borderRadius: 18,
+          backgroundColor: '#00d4ff22', borderWidth: 2,
+          borderColor: '#00d4ff', alignItems: 'center',
+          justifyContent: 'center', overflow: 'hidden',
+        }}>
+        {photo ? (
+          <Image source={{ uri: photo }}
+            style={{ width: 36, height: 36, borderRadius: 18 }} />
+        ) : (
+          <Text style={{ color: '#00d4ff', fontSize: 14, fontWeight: '800' }}>
+            {initial}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function HomeScreen({ navigation, route }) {
   const { userName } = route.params || {};
   const { language, setLanguage, toggleLanguage, t } = useLanguage();
   
   React.useEffect(() => {
-    navigation.setParams({
-      onToggleLanguage: toggleLanguage,
-      language: language,
+    navigation.setOptions({
+      headerRight: () => (
+        <HeaderRight
+          navigation={navigation}
+          language={language}
+          toggleLanguage={toggleLanguage}
+        />
+      ),
     });
-  }, [language]);
+  }, [language, toggleLanguage]);
+
+  // ── Reload profile data every time screen is focused ──────────────
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadProfileData = async () => {
+        try {
+          const savedName  = await SecureStore.getItemAsync('bd_username');
+          const savedPhoto = await SecureStore.getItemAsync('bd_profile_photo');
+          if (savedName)  setCurrentUserName(savedName);
+          if (savedPhoto) setProfilePhoto(savedPhoto);
+          else setProfilePhoto(null);
+        } catch (_) {}
+      };
+      loadProfileData();
+    }, [])
+  );
+
+
   const [unitsConsumed,  setUnitsConsumed]  = useState('');
   const [daysRemaining,  setDaysRemaining]  = useState('');
   const [selectedDISCO,  setSelectedDISCO]  = useState(null);
@@ -43,6 +184,23 @@ export default function HomeScreen({ navigation, route }) {
   const [contactVisible, setContactVisible] = useState(false);
   const [nepraVisible,   setNepraVisible]   = useState(false);
   const [langPopup, setLangPopup] = useState(false);
+  const [showLoading, setShowLoading] = useState(false);
+  const [currentUserName,  setCurrentUserName]  = useState(userName || '');
+  const [profilePhoto,     setProfilePhoto]      = useState(null);
+  const [alertConfig, setAlertConfig] = useState({
+    visible : false,
+    type    : 'info',
+    title   : '',
+    message : '',
+    buttons : [{ text: 'OK' }],
+  });
+
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
+  const hideAlert = () => {
+    setAlertConfig(prev => ({ ...prev, visible: false }));
+  };
 
 // Load saved company on first visit
   React.useEffect(() => {
@@ -60,13 +218,15 @@ export default function HomeScreen({ navigation, route }) {
     setUnitsConsumed(String(route.params.scannedUnits));
     if (route?.params?.scannedDays !== undefined) {
       setDaysRemaining(String(route.params.scannedDays));
-      Alert.alert(
-        '✅ Reading Applied!',
+      showAlert(
+        'success',
+        'Reading Applied!',
         `${route.params.scannedUnits} units and ${route.params.scannedDays} days remaining have been auto-filled automatically!`
       );
     } else {
-      Alert.alert(
-        '✅ Reading Applied!',
+      showAlert(
+        'success',
+        'Reading Applied!',
         `${route.params.scannedUnits} units have been auto-filled. Please enter the days remaining to continue.`
       );
     }
@@ -86,6 +246,21 @@ React.useEffect(() => {
   checkFirstVisit();
 }, []);
 
+  // ── Reload name every time HomeScreen comes into focus ──────────────
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadProfileData = async () => {
+        try {
+          const savedName  = await SecureStore.getItemAsync('bd_username');
+          const savedPhoto = await SecureStore.getItemAsync('bd_profile_photo');
+          if (savedName)  setCurrentUserName(savedName);
+          if (savedPhoto) setProfilePhoto(savedPhoto);
+        } catch (_) {}
+      };
+      loadProfileData();
+    }, [])
+  );
+
   const getWarningLevel = (units) => {
     if (units <= 194) return { level: 'SAFE',     color: '#4ade80', bg: '#052e16', border: '#16a34a' };
     if (units <= 196) return { level: 'WARNING',  color: '#fbbf24', bg: '#1c1502', border: '#ca8a04' };
@@ -97,37 +272,46 @@ React.useEffect(() => {
     const units = parseFloat(unitsConsumed);
     const days  = parseInt(daysRemaining);
     if (!selectedDISCO) {
-      Alert.alert('Select Company', 'Please select your electricity distribution company.');
+      showAlert('warning', 'Select Company', 'Please select your electricity distribution company.');
       return;
     }
     if (isNaN(units) || units < 0 || units > 199) {
-      Alert.alert('Invalid Input', 'Please enter units between 0 and 199.');
+      showAlert('error', 'Invalid Input', 'Please enter units between 0 and 199.');
       return;
     }
     if (isNaN(days) || days < 1 || days > 30) {
-      Alert.alert('Invalid Input', 'Please enter days between 1 and 30.');
+      showAlert('error', 'Invalid Input', 'Please enter days between 1 and 30.');
       return;
     }
-    navigation.navigate('Appliances', {
-      unitsConsumed: units,
-      daysRemaining: days,
-      discoCompany : selectedDISCO,
-    });
+    setShowLoading(true);
+    setTimeout(() => {
+      setShowLoading(false);
+      navigation.navigate('Appliances', {
+        unitsConsumed: units,
+        daysRemaining: days,
+        discoCompany : selectedDISCO,
+      });
+    }, 3000);
   };
 
-  const units     = parseFloat(unitsConsumed) || 0;
-  const warning   = getWarningLevel(units);
-  const remaining = PROTECTED_SLAB - units;
-  const pct       = Math.min((units / PROTECTED_SLAB) * 100, 100);
+  const units          = parseFloat(unitsConsumed) || 0;
+  const days           = parseInt(daysRemaining) || 0;
+  const daysElapsed    = 30 - days;
+  const dailyRate      = daysElapsed > 0 ? units / daysElapsed : units / 30;
+  const projectedTotal = Math.min(units + (dailyRate * days), 350);
+  const warning        = getWarningLevel(projectedTotal);
+  const remaining      = Math.max(PROTECTED_SLAB - projectedTotal, 0);
+  const pct            = Math.min((projectedTotal / PROTECTED_SLAB) * 100, 100);
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#060810' }}>
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
       {/* ── HERO ── */}
       <View style={styles.hero}>
         <Text style={styles.heroIcon}>⚡</Text>
-        {userName ? (
-          <Text style={styles.welcomeGreeting}>{t.welcome}, {userName}! 👋</Text>
+        {currentUserName ? (
+          <Text style={styles.welcomeGreeting}>{t.welcome}, {currentUserName}! 👋</Text>
         ) : null}
         <Text style={styles.heroTitle}>Bijli-Dost</Text>
         <Text style={styles.heroTagline}>AI Electricity Slab Scheduler</Text>
@@ -191,7 +375,7 @@ React.useEffect(() => {
   style={styles.scanBillBtn}
   onPress={() => {
   if (!selectedDISCO) {
-    Alert.alert('Select Company First', 'Please select your electricity company before scanning a bill.');
+    showAlert('warning', 'Select Company First', 'Please select your electricity company before scanning a bill.');
     return;
   }
   navigation.navigate('BillScanner', { selectedDISCO });
@@ -233,36 +417,146 @@ React.useEffect(() => {
         </View>
       </View>
 
-      {/* ── STATUS ── */}
-      {unitsConsumed !== '' && (
-        <View style={[styles.statusCard, { backgroundColor: warning.bg, borderColor: warning.border }]}>
-          <View style={styles.statusRow}>
-            <Text style={[styles.statusLevel, { color: warning.color }]}>
-              {warning.level === 'SAFE'     && '✅  SAFE'}
-              {warning.level === 'WARNING'  && '⚠️  WARNING'}
-              {warning.level === 'CRITICAL' && '🔴  CRITICAL'}
-              {warning.level === 'EXCEEDED' && '❌  EXCEEDED'}
+      {/* ── SMART PREDICTION CARD ── */}
+      {unitsConsumed !== '' && days > 0 && (
+        <View style={styles.predCard}>
+
+          {/* ── CIRCULAR GAUGE ── */}
+          <View style={styles.gaugeRow}>
+            <CircularGauge
+              percentage={Math.min((projectedTotal / PROTECTED_SLAB) * 100, 100)}
+              color={
+                projectedTotal <= 199 ? '#4ade80' :
+                projectedTotal <= 230 ? '#fbbf24' : '#f87171'
+              }
+            />
+            <View style={styles.gaugeSide}>
+              <Text style={styles.gaugeSideTitle}>Projected Usage</Text>
+              <Text style={[styles.gaugeSideVal, {
+                color: projectedTotal <= 199 ? '#4ade80' : '#f87171'
+              }]}>{projectedTotal.toFixed(0)} units</Text>
+              <Text style={styles.gaugeSideLabel}>by end of month</Text>
+              <View style={styles.gaugeDivider} />
+              <Text style={styles.gaugeSideTitle}>Safe Daily Limit</Text>
+              <Text style={styles.gaugeSideVal}>
+                {days > 0 ? ((PROTECTED_SLAB - units) / days).toFixed(1) : '0'}
+              </Text>
+              <Text style={styles.gaugeSideLabel}>units/day remaining</Text>
+            </View>
+            </View>
+      
+
+          {/* ── HEADER ── */}
+          <View style={styles.predHeader}>
+            <Text style={styles.predIcon}>📊</Text>
+            <Text style={styles.predTitle}>Bill Prediction</Text>
+            <View style={[styles.predBadge, {
+              backgroundColor:
+                projectedTotal <= 199 ? '#05261688' :
+                projectedTotal <= 230 ? '#1c150288' : '#1c020288',
+              borderColor:
+                projectedTotal <= 199 ? '#16a34a' :
+                projectedTotal <= 230 ? '#ca8a04' : '#dc2626',
+            }]}>
+              <Text style={[styles.predBadgeText, {
+                color:
+                  projectedTotal <= 199 ? '#4ade80' :
+                  projectedTotal <= 230 ? '#fbbf24' : '#f87171',
+              }]}>
+                {projectedTotal <= 199 ? '✅ SAFE' :
+                 projectedTotal <= 230 ? '⚠️ WARNING' : '❌ EXCEEDED'}
+              </Text>
+            </View>
+          </View>
+
+          {/* ── PROGRESS BAR ── */}
+          <View style={styles.predProgressWrap}>
+            <View style={[styles.predProgressFill, {
+              width: `${Math.min((projectedTotal / PROTECTED_SLAB) * 100, 100)}%`,
+              backgroundColor:
+                projectedTotal <= 199 ? '#4ade80' :
+                projectedTotal <= 230 ? '#fbbf24' : '#f87171',
+            }]} />
+            <View style={styles.predLimitLine} />
+          </View>
+          <View style={styles.predProgressLabels}>
+            <Text style={styles.predProgressLabel}>0</Text>
+            <Text style={styles.predProgressLabel}>199 limit</Text>
+          </View>
+
+          {/* ── STATS GRID ── */}
+          <View style={styles.predGrid}>
+            <View style={styles.predGridItem}>
+              <Text style={styles.predGridVal}>{units.toFixed(0)}</Text>
+              <Text style={styles.predGridLabel}>Used Now</Text>
+            </View>
+            <View style={styles.predGridDivider} />
+            <View style={styles.predGridItem}>
+              <Text style={[styles.predGridVal, {
+                color: projectedTotal <= 199 ? '#4ade80' : '#f87171'
+              }]}>{projectedTotal.toFixed(0)}</Text>
+              <Text style={styles.predGridLabel}>Projected</Text>
+            </View>
+            <View style={styles.predGridDivider} />
+            <View style={styles.predGridItem}>
+              <Text style={styles.predGridVal}>{dailyRate.toFixed(1)}</Text>
+              <Text style={styles.predGridLabel}>Daily Avg</Text>
+            </View>
+            <View style={styles.predGridDivider} />
+            <View style={styles.predGridItem}>
+              <Text style={styles.predGridVal}>{days}</Text>
+              <Text style={styles.predGridLabel}>Days Left</Text>
+            </View>
+          </View>
+
+          {/* ── AI MESSAGE ── */}
+          <View style={[styles.predMessage, {
+            borderColor:
+              projectedTotal <= 199 ? '#16a34a' :
+              projectedTotal <= 230 ? '#ca8a04' : '#dc2626',
+            backgroundColor:
+              projectedTotal <= 199 ? '#05261622' :
+              projectedTotal <= 230 ? '#1c150222' : '#1c020222',
+          }]}>
+
+      
+
+            {/* Line 4 — dynamic */}
+            {projectedTotal <= 199 ? (
+              <Text style={styles.predMsgLine}>
+                ✅{' '}
+                <Text style={[styles.predMsgBold, { color: '#4ade80' }]}>
+                  You are on track!
+                </Text>
+                {' '}You will save{' '}
+                <Text style={styles.predMsgBold}>
+                  {(PROTECTED_SLAB - projectedTotal).toFixed(0)} units
+                </Text>
+                {' '}under the limit.
+              </Text>
+            ) : (
+              <Text style={styles.predMsgLine}>
+                ❌ You will{' '}
+                <Text style={[styles.predMsgBold, { color: '#f87171' }]}>
+                  EXCEED
+                </Text>
+                {' '}the 199 limit by{' '}
+                <Text style={[styles.predMsgBold, { color: '#f87171' }]}>
+                  {(projectedTotal - PROTECTED_SLAB).toFixed(0)} units!
+                </Text>
+              </Text>
+            )}
+
+            {/* Line 5 — safe daily limit */}
+            <Text style={styles.predMsgLine}>
+              💡 To stay safe, use max{' '}
+              <Text style={styles.predMsgBold}>
+                {days > 0
+                  ? ((PROTECTED_SLAB - units) / days).toFixed(1)
+                  : '0'} units/day
+              </Text>
             </Text>
-            <Text style={[styles.statusPct, { color: warning.color }]}>{pct.toFixed(1)}%</Text>
-          </View>
-          <View style={styles.progressWrap}>
-            <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: warning.color }]} />
-          </View>
-          <View style={styles.statusStats}>
-            <View style={styles.statItem}>
-              <Text style={styles.statVal}>{units.toFixed(0)}</Text>
-              <Text style={styles.statLabel}>Used</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statVal}>{remaining.toFixed(0)}</Text>
-              <Text style={styles.statLabel}>Remaining</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statVal}>{PROTECTED_SLAB}</Text>
-              <Text style={styles.statLabel}>NEPRA Limit</Text>
-            </View>
+
           </View>
         </View>
       )}
@@ -548,9 +842,40 @@ React.useEffect(() => {
           </View>
         </BlurView>
       )}
-  </ScrollView>
+
+      </ScrollView>
+
+      {/* ── LOADING SCREEN ── */}
+      {showLoading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <Text style={styles.loadingIcon}>⚡</Text>
+            <Text style={styles.loadingTitle}>Bijli-Dost</Text>
+            <Text style={styles.loadingSubtitle}>Preparing Your Appliances...</Text>
+            <ActivityIndicator
+              size="large"
+              color="#00d4ff"
+              style={{ marginTop: 24 }}
+            />
+            <Text style={styles.loadingHint}>
+              Setting up your personalized{'\n'}energy schedule
+            </Text>
+          </View>
+        </View>
+      )}
+
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={hideAlert}
+      />
+    </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: '#060810' },
@@ -688,32 +1013,93 @@ const styles = StyleSheet.create({
                 backgroundColor: '#00d4ff08', borderWidth: 1,
                 borderColor: '#00d4ff33', borderRadius: 12,
                 padding: 14, marginBottom: 12 },
-scanBillIcon: { fontSize: 24 },
-scanBillTitle:{ color: '#00d4ff', fontWeight: '700', fontSize: 14 },
-scanBillSub:  { color: '#4b5563', fontSize: 11, marginTop: 2 },
-scanBillArrow:{ color: '#00d4ff', fontSize: 18 },
-welcomeGreeting: { fontSize: 14, color: '#00d4ff', fontWeight: '600', marginBottom: 6 },
-copyright: { textAlign: 'center', color: '#1f2937', fontSize: 11, marginBottom: 8 },
-langToggleBtn:  { backgroundColor: '#00d4ff12', borderWidth: 1,
+  scanBillIcon: { fontSize: 24 },
+  scanBillTitle:{ color: '#00d4ff', fontWeight: '700', fontSize: 14 },
+  scanBillSub:  { color: '#4b5563', fontSize: 11, marginTop: 2 },
+  scanBillArrow:{ color: '#00d4ff', fontSize: 18 },
+  welcomeGreeting: { fontSize: 14, color: '#00d4ff', fontWeight: '600', marginBottom: 6 },
+  copyright: { textAlign: 'center', color: '#1f2937', fontSize: 11, marginBottom: 8 },
+  langToggleBtn:  { backgroundColor: '#00d4ff12', borderWidth: 1,
                   borderColor: '#00d4ff33', borderRadius: 10,
                   paddingHorizontal: 16, paddingVertical: 8, marginTop: 10 },
-langToggleText: { color: '#00d4ff', fontSize: 12, fontWeight: '700' },
-blurOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+  langToggleText: { color: '#00d4ff', fontSize: 12, fontWeight: '700' },
+  blurOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                justifyContent: 'flex-start', alignItems: 'center', padding: 24, paddingTop: 60 },
-langPopup:          { width: '100%', backgroundColor: '#111827ee', borderRadius: 24,
+  langPopup:          { width: '100%', backgroundColor: '#111827ee', borderRadius: 24,
                       borderWidth: 1, borderColor: '#1f2937', padding: 28,
                       alignItems: 'center' },
-langPopupIcon:      { fontSize: 40, marginBottom: 12 },
-langPopupTitle:     { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 8 },
-langPopupHint:      { fontSize: 13, color: '#6b7280', marginBottom: 24, textAlign: 'center' },
-langPopupBtn:       { width: '100%', flexDirection: 'row', alignItems: 'center',
+  langPopupIcon:      { fontSize: 40, marginBottom: 12 },
+  langPopupTitle:     { fontSize: 22, fontWeight: '800', color: '#ffffff', marginBottom: 8 },
+  langPopupHint:      { fontSize: 13, color: '#6b7280', marginBottom: 24, textAlign: 'center' },
+  langPopupBtn:       { width: '100%', flexDirection: 'row', alignItems: 'center',
                       backgroundColor: '#1f2937', borderRadius: 14,
                       borderWidth: 1, borderColor: '#374151',
                       padding: 16, marginBottom: 12 },
-langPopupBtnActive: { borderColor: '#00d4ff', backgroundColor: '#00d4ff15' },
-langPopupFlag:      { fontSize: 24, marginRight: 14 },
-langPopupBtnText:   { flex: 1, fontSize: 18, color: '#9ca3af', fontWeight: '700' },
-langPopupBtnTextActive: { color: '#00d4ff' },
-langPopupCheck:     { color: '#00d4ff', fontWeight: '800', fontSize: 18 },
+  langPopupBtnActive: { borderColor: '#00d4ff', backgroundColor: '#00d4ff15' },
+  langPopupFlag:      { fontSize: 24, marginRight: 14 },
+  langPopupBtnText:   { flex: 1, fontSize: 18, color: '#9ca3af', fontWeight: '700' },
+  langPopupBtnTextActive: { color: '#00d4ff' },
+  langPopupCheck:     { color: '#00d4ff', fontWeight: '800', fontSize: 18 },
+  predCard:         { backgroundColor: '#0f1724', borderRadius: 20,
+                        borderWidth: 1, borderColor: '#1a2332',
+                        padding: 20, marginBottom: 16 },
+  predHeader:       { flexDirection: 'row', alignItems: 'center',
+                        gap: 10, marginBottom: 14 },
+  predIcon:         { fontSize: 22 },
+  predTitle:        { fontSize: 16, fontWeight: '800', color: '#ffffff', flex: 1 },
+  predBadge:        { borderWidth: 1, borderRadius: 10,
+                        paddingHorizontal: 10, paddingVertical: 4 },
+  predBadgeText:    { fontSize: 12, fontWeight: '800' },
+
+  predProgressWrap: { backgroundColor: '#1f2937', borderRadius: 999,
+                        height: 8, overflow: 'hidden', marginBottom: 4,
+                        position: 'relative' },
+  predProgressFill: { height: '100%', borderRadius: 999 },
+  predLimitLine:    { position: 'absolute', right: 0, top: 0,
+                        bottom: 0, width: 2, backgroundColor: '#ffffff33' },
+  predProgressLabels:{ flexDirection: 'row', justifyContent: 'space-between',
+                        marginBottom: 16 },
+  predProgressLabel:{ fontSize: 10, color: '#4b5563', fontWeight: '600' },
+
+  predGrid:         { flexDirection: 'row', backgroundColor: '#161f2e',
+                        borderRadius: 14, borderWidth: 1,
+                        borderColor: '#1f2d3d', padding: 16,
+                        marginBottom: 14 },
+  predGridItem:     { flex: 1, alignItems: 'center' },
+  predGridVal:      { fontSize: 20, fontWeight: '800', color: '#ffffff' },
+  predGridLabel:    { fontSize: 10, color: '#6b7280', marginTop: 4,
+                        fontWeight: '600', textAlign: 'center' },
+  predGridDivider:  { width: 1, backgroundColor: '#1f2d3d' },
+  predMessage:      { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
+  predMsgLine:      { fontSize: 13, color: '#9ca3af', lineHeight: 22 },
+  predMsgBold:      { fontWeight: '800', color: '#ffffff' },
+  gaugeRow:       { flexDirection: 'row', alignItems: 'center',
+                    gap: 16, marginBottom: 16,
+                    paddingBottom: 16, borderBottomWidth: 1,
+                    borderBottomColor: '#1a2332' },
+  gaugeSide:      { flex: 1 },
+  gaugeSideTitle: { fontSize: 11, color: '#6b7280', fontWeight: '700',
+                    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  gaugeSideVal:   { fontSize: 24, fontWeight: '800', color: '#ffffff', marginBottom: 2 },
+  gaugeSideLabel: { fontSize: 11, color: '#4b5563', marginBottom: 10 },
+  gaugeDivider:   { height: 1, backgroundColor: '#1a2332', marginBottom: 10 },
+  loadingOverlay:   { position: 'absolute', top: 0, left: 0,
+                      right: 0, bottom: 0,
+                      backgroundColor: '#060810ee',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      zIndex: 999 },
+  loadingCard:      { backgroundColor: '#0f1724', borderRadius: 24,
+                      borderWidth: 1, borderColor: '#00d4ff33',
+                      padding: 40, alignItems: 'center',
+                      width: '80%' },
+  loadingIcon:      { fontSize: 52, marginBottom: 12 },
+  loadingTitle:     { fontSize: 28, fontWeight: '800',
+                      color: '#00d4ff', marginBottom: 6 },
+  loadingSubtitle:  { fontSize: 14, color: '#ffffff',
+                      fontWeight: '700', marginBottom: 4 },
+  loadingHint:      { fontSize: 12, color: '#6b7280',
+                      textAlign: 'center', marginTop: 16,
+                      lineHeight: 18 },
 
 });

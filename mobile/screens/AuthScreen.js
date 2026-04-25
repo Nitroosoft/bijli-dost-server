@@ -6,8 +6,9 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, Alert, Modal,
+  StyleSheet, Modal,
 } from 'react-native';
+import CustomAlert from '../components/CustomAlert';
 import * as SecureStore from 'expo-secure-store';
 import { useLanguage } from '../LanguageContext';
 
@@ -15,17 +16,31 @@ export default function AuthScreen({ navigation }) {
   const { language, setLanguage, t } = useLanguage();
   const [name,      setName]      = useState('');
   const [langModal, setLangModal] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({
+    visible : false,
+    type    : 'info',
+    title   : '',
+    message : '',
+    buttons : [{ text: 'OK' }],
+  });
+
+  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
+    setAlertConfig({ visible: true, type, title, message, buttons });
+  };
+  const hideAlert = () => {
+    setAlertConfig(prev => ({ ...prev, visible: false }));
+  };
 
   const handleContinue = async () => {
     if (!name.trim()) {
-      Alert.alert('', 'Please enter your name to continue.');
+      showAlert('warning', 'Name Required', 'Please enter your name to continue.');
       return;
     }
     try {
       await SecureStore.setItemAsync('bd_username', name.trim());
       navigation.replace('Home', { userName: name.trim() });
     } catch (e) {
-      Alert.alert('Error', 'Could not save name.');
+      showAlert('error', 'Error', 'Could not save your name. Please try again.');
     }
   };
 
@@ -121,6 +136,15 @@ export default function AuthScreen({ navigation }) {
 
       <Text style={styles.copyright}>© 2026 Bijli-Dost · v1.0.0 · Pakistan</Text>
       <Text style={styles.copyright}>by NITROSOFT</Text>
+
+      <CustomAlert
+        visible={alertConfig.visible}
+        type={alertConfig.type}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={hideAlert}
+      />
 
     </View>
   );

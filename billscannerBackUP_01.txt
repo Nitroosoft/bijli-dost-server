@@ -7,9 +7,8 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Image, ActivityIndicator, Platform,
+  ScrollView, Alert, Image, ActivityIndicator, Platform,
 } from 'react-native';
-import CustomAlert from '../components/CustomAlert';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLanguage } from '../LanguageContext';
@@ -31,21 +30,6 @@ export default function BillScannerScreen({ navigation, route }) {
   const [showDatePicker,setShowDatePicker]= useState(false);
   const [todayDate,     setTodayDate]     = useState(new Date());
   const [finalResult,   setFinalResult]   = useState(null);
-  const [showLoading,   setShowLoading]   = useState(false);
-  const [alertConfig, setAlertConfig] = useState({
-    visible : false,
-    type    : 'info',
-    title   : '',
-    message : '',
-    buttons : [{ text: 'OK' }],
-  });
-
-  const showAlert = (type, title, message, buttons = [{ text: 'OK' }]) => {
-    setAlertConfig({ visible: true, type, title, message, buttons });
-  };
-  const hideAlert = () => {
-    setAlertConfig(prev => ({ ...prev, visible: false }));
-  };
 
   // ── Pick Image ─────────────────────────────────────────────────────────────
   const pickImage = async (fromCamera, forBill) => {
@@ -54,7 +38,7 @@ export default function BillScannerScreen({ navigation, route }) {
       if (fromCamera) {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) {
-          showAlert('warning', 'Permission Needed', 'Camera permission is required.');
+          Alert.alert('Permission needed', 'Camera permission is required.');
           return;
         }
         res = await ImagePicker.launchCameraAsync({
@@ -77,14 +61,14 @@ export default function BillScannerScreen({ navigation, route }) {
         }
       }
     } catch (e) {
-     showAlert('error', 'Error', 'Could not open image picker.');
+      Alert.alert('Error', 'Could not open image picker.');
     }
   };
 
   // ── Scan Bill Photo ────────────────────────────────────────────────────────
   const scanBillPhoto = async () => {
     if (!billImage?.base64) {
-      showAlert('warning', 'No Image', 'Please select your bill photo first.');
+      Alert.alert('No Image', 'Please select your bill photo first.');
       return;
     }
     setScanning(true);
@@ -110,32 +94,30 @@ export default function BillScannerScreen({ navigation, route }) {
         setBillData(data);
         setStep(2);
       } else if (data.wrong_company) {
-        showAlert(
-          'error',
-          'Wrong Company Bill',
-          `You selected ${selectedDISCO?.name} but uploaded a ${data.actual_company} bill. What do you want to do?`,
+        Alert.alert(
+          '❌ Wrong Company Bill',
+          `You selected ${selectedDISCO?.name} but uploaded a ${data.actual_company} bill.\n\nWhat do you want to do?`,
           [
-            { text: '🏢 Change Company', style: 'secondary', onPress: () => navigation.navigate('Home') },
-            { text: '📸 Upload Again',   style: 'primary',   onPress: () => setBillImage(null) },
-            { text: 'Cancel',            style: 'cancel' },
+            { text: '🏢 Change Company', onPress: () => navigation.navigate('Home') },
+            { text: '📸 Upload Again',   onPress: () => setBillImage(null) },
+            { text: 'Cancel', style: 'cancel' },
           ]
         );
       } else {
-        showAlert('error', 'Scan Failed', data.error || 'Could not read bill.');
+        Alert.alert('Scan Failed', data.error || 'Could not read bill.');
       }
     } catch {
-      showAlert('error', 'Connection Error', 'Could not connect to server.');
+      Alert.alert('Error', 'Could not connect to server.');
     }
     clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
     setScanning(false);
     setScanStatus('');
   };
 
-
   // ── Scan Meter Photo ───────────────────────────────────────────────────────
   const scanMeterPhoto = async () => {
     if (!meterImage?.base64) {
-      showAlert('warning', 'No Image', 'Please take a photo of your meter first.');
+      Alert.alert('No Image', 'Please take a photo of your meter first.');
       return;
     }
     setScanning(true);
@@ -158,11 +140,11 @@ export default function BillScannerScreen({ navigation, route }) {
       if (data.success) {
         setMeterData(data);
         setStep(3);
-     } else {
-        showAlert('error', 'Scan Failed', data.error || 'Could not read meter.');
+      } else {
+        Alert.alert('Scan Failed', data.error || 'Could not read meter.');
       }
     } catch {
-      showAlert('error', 'Connection Error', 'Could not connect to server.');
+      Alert.alert('Error', 'Could not connect to server.');
     }
     clearTimeout(t1); clearTimeout(t2); clearTimeout(t3);
     setScanning(false);
@@ -183,10 +165,10 @@ export default function BillScannerScreen({ navigation, route }) {
     const daysRemaining = Math.max(1, 30 - daysUsed);
 
     if (unitsUsed > 199) {
-      showAlert(
-        'error',
-        'Limit Exceeded',
-        `You have already used ${unitsUsed} units which exceeds the 199-unit NEPRA protected slab limit. Please reduce your appliance usage.`
+      Alert.alert(
+        '❌ Limit Exceeded',
+        `You have already used ${unitsUsed} units which exceeds the 199-unit NEPRA protected slab limit.`,
+        [{ text: 'OK' }]
       );
       return;
     }
@@ -203,34 +185,13 @@ export default function BillScannerScreen({ navigation, route }) {
     setStep(4);
   };
 
-  // ── Go To Appliances Directly ──────────────────────────────────────────────
-  const goToAppliances = () => {
+  // ── Use This Reading ───────────────────────────────────────────────────────
+  const useThisReading = () => {
     if (!finalResult) return;
-
-    const safeUnits = isNaN(finalResult.unitsUsed) || finalResult.unitsUsed < 0
-      ? 0 : finalResult.unitsUsed;
-    const safeDays  = isNaN(finalResult.daysRemaining) || finalResult.daysRemaining < 1
-      ? 15 : finalResult.daysRemaining;
-
-    if (safeUnits === 0 || isNaN(finalResult.daysRemaining)) {
-      showAlert(
-        'warning',
-        'Calculation Issue',
-        'Units or days could not be calculated correctly from your scan. Please check your bill date and meter reading and try again.',
-        [{ text: 'Try Again', style: 'primary', onPress: () => setStep(1) }]
-      );
-      return;
-    }
-
-    setShowLoading(true);
-    setTimeout(() => {
-      setShowLoading(false);
-      navigation.navigate('Appliances', {
-        unitsConsumed: safeUnits,
-        daysRemaining: safeDays,
-        discoCompany : selectedDISCO,
-      });
-    }, 3000);
+    navigation.navigate('Home', {
+      scannedUnits   : finalResult.unitsUsed,
+      scannedDays    : finalResult.daysRemaining,
+    });
   };
 
   // ── Format Date ────────────────────────────────────────────────────────────
@@ -500,22 +461,15 @@ export default function BillScannerScreen({ navigation, route }) {
 
           <View style={styles.autoFillBox}>
             <Text style={styles.autoFillText}>
-              ✅ Units Consumed:{' '}
-              <Text style={{ color: '#00d4ff', fontWeight: '800' }}>
-                {finalResult.unitsUsed}
-              </Text>
-              {' '}kWh{'\n'}
-              ✅ Days Remaining:{' '}
-              <Text style={{ color: '#4ade80', fontWeight: '800' }}>
-                {finalResult.daysRemaining}
-              </Text>
-              {' '}days{'\n\n'}
-              🚀 Tap below to go directly to appliances selection!
+              ✅ Units Consumed: <Text style={{ color: '#00d4ff', fontWeight: '800' }}>{finalResult.unitsUsed}</Text>
+              {' '}will be auto-filled{'\n'}
+              ✅ Days Remaining: <Text style={{ color: '#4ade80', fontWeight: '800' }}>{finalResult.daysRemaining}</Text>
+              {' '}will be auto-filled
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.useBtn} onPress={goToAppliances}>
-            <Text style={styles.useBtnText}>🏠 Select Appliances →</Text>
+          <TouchableOpacity style={styles.useBtn} onPress={useThisReading}>
+            <Text style={styles.useBtnText}>✅ Use This Reading</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -532,36 +486,9 @@ export default function BillScannerScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       )}
-      {/* LOADING SCREEN */}
-      {showLoading && (
-        <View style={styles.loadingOverlay}>
-          <View style={styles.loadingCard}>
-            <Text style={styles.loadingIcon}>⚡</Text>
-            <Text style={styles.loadingTitle}>Bijli-Dost</Text>
-            <Text style={styles.loadingSubtitle}>Preparing Your Appliances...</Text>
-            <ActivityIndicator
-              size="large"
-              color="#00d4ff"
-              style={{ marginTop: 24 }}
-            />
-            <Text style={styles.loadingHint}>
-              Setting up your personalized{'\n'}energy schedule
-            </Text>
-          </View>
-        </View>
-      )}
 
       <Text style={styles.copyright}>© 2026 Bijli-Dost · v1.0.0 · Pakistan</Text>
       <Text style={styles.copyright}>by NITROSOFT</Text>
-
-      <CustomAlert
-        visible={alertConfig.visible}
-        type={alertConfig.type}
-        title={alertConfig.title}
-        message={alertConfig.message}
-        buttons={alertConfig.buttons}
-        onClose={hideAlert}
-      />
 
     </ScrollView>
   );
@@ -669,24 +596,4 @@ const styles = StyleSheet.create({
 
   copyright:          { textAlign: 'center', color: '#1f2937',
                         fontSize: 11, marginBottom: 4 },
-
-  loadingOverlay:     { position: 'absolute', top: 0, left: 0,
-                        right: 0, bottom: 0,
-                        backgroundColor: '#060810ee',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        zIndex: 999 },
-  loadingCard:        { backgroundColor: '#0f1724', borderRadius: 24,
-                        borderWidth: 1, borderColor: '#00d4ff33',
-                        padding: 40, alignItems: 'center',
-                        width: '80%' },
-  loadingIcon:        { fontSize: 52, marginBottom: 12 },
-  loadingTitle:       { fontSize: 28, fontWeight: '800',
-                        color: '#00d4ff', marginBottom: 6 },
-  loadingSubtitle:    { fontSize: 14, color: '#ffffff',
-                        fontWeight: '700', marginBottom: 4 },
-  loadingHint:        { fontSize: 12, color: '#6b7280',
-                        textAlign: 'center', marginTop: 16,
-                        lineHeight: 18 },
-  
 });
