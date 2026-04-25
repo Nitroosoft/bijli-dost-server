@@ -116,7 +116,12 @@ class BijliDostCSP:
 
         # Cluster weights for cost function:
         # HIGH power appliances penalized more for reduction
-        self.cluster_weights = {'HIGH': 3.0, 'MEDIUM': 1.5, 'LOW': 0.8}
+        # Based on Pakistan household research data:
+        # AC = 41% consumption (reduce first)
+        # Fans = 22% consumption (protect - every home has 6)
+        # Fridge = 14% (protect - essential)
+        # Lighting = 15% (protect - necessity)
+        self.cluster_weights = {'HIGH': 0.4, 'MEDIUM': 1.5, 'LOW': 4.0}
 
     # ------------------------------------------------------------------
     # SECTION 3: DOMAIN BUILDER
@@ -372,7 +377,7 @@ class BijliDostCSP:
                     )
                     # HIGH cluster gets reduced first (higher priority)
                     cluster  = self.clusters.get(name, 'MEDIUM')
-                    priority = {'HIGH': 3, 'MEDIUM': 2, 'LOW': 1}[cluster]
+                    priority = {'HIGH': 5, 'MEDIUM': 2, 'LOW': 0.5}[cluster]
                     candidates.append((contrib * priority, name, idx))
 
             if not candidates:
