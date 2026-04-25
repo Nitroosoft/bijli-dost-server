@@ -121,7 +121,44 @@ class BijliDostCSP:
         # Fans = 22% consumption (protect - every home has 6)
         # Fridge = 14% (protect - essential)
         # Lighting = 15% (protect - necessity)
+        # ── Research-backed appliance priority weights ──────────────────
+        # Based on Pakistan household study (523 homes):
+        # Essential = protect (high weight = hard to reduce)
+        # Luxury = reduce first (low weight = easy to reduce)
         self.cluster_weights = {'HIGH': 0.4, 'MEDIUM': 1.5, 'LOW': 4.0}
+
+        # Individual appliance priority weights
+        # Higher = protect more | Lower = reduce first
+        self.appliance_priority = {
+            # ── ESSENTIAL — protect always ──────────────────────────────
+            'refrigerator'    : 5.0,  # every home has one, runs 24/7
+            'ceiling_fan'     : 4.5,  # every home has 6, basic necessity
+            'pedestal_fan'    : 4.0,  # common necessity
+            'led_bulb'        : 4.5,  # lighting necessity
+            'energy_saver'    : 4.5,  # lighting necessity
+            'tube_light'      : 4.0,  # lighting necessity
+            'wifi_router'     : 4.0,  # always on, low power
+
+            # ── MODERATE — reduce if needed ─────────────────────────────
+            'tv_led_32'       : 3.0,  # entertainment but common
+            'tv_led_55'       : 2.5,  # entertainment, high power
+            'laptop'          : 3.0,  # work necessity
+            'desktop_pc'      : 2.5,  # work but high power
+            'washing_machine' : 2.5,  # schedulable
+            'microwave'       : 2.5,  # occasional use
+            'electric_kettle' : 2.0,  # occasional use
+            'toaster'         : 2.0,  # occasional use
+            'water_pump'      : 3.0,  # necessary but schedulable
+            'cooler'          : 3.5,  # necessity in summer
+
+            # ── LUXURY — reduce first ────────────────────────────────────
+            'ac_1_ton'        : 0.8,  # luxury, only 40% homes have AC
+            'ac_1_5_ton'      : 0.6,  # luxury, high power
+            'ac_2_ton'        : 0.4,  # luxury, very high power
+            'geyser_electric' : 0.8,  # seasonal, schedulable
+            'deep_freezer'    : 1.5,  # not essential daily
+            'iron'            : 2.0,  # schedulable
+        }
 
     # ------------------------------------------------------------------
     # SECTION 3: DOMAIN BUILDER
@@ -181,9 +218,11 @@ class BijliDostCSP:
         # HIGH power appliances cost more to reduce (user comfort)
         comfort_penalty = 0
         for name in assignment:
-            diff    = abs(assignment[name] - self.appliances[name])
-            weight  = self.cluster_weights.get(
-                self.clusters.get(name, 'MEDIUM'), 1.5
+            diff = abs(assignment[name] - self.appliances[name])
+            # Use individual priority if available, else fall back to cluster weight
+            weight = self.appliance_priority.get(
+                name,
+                self.cluster_weights.get(self.clusters.get(name, 'MEDIUM'), 1.5)
             )
             comfort_penalty += diff * weight
 
@@ -376,10 +415,18 @@ class BijliDostCSP:
                         name, current[name], self.days_remaining
                     )
                     # HIGH cluster gets reduced first (higher priority)
-                    cluster  = self.clusters.get(name, 'MEDIUM')
-                    priority = {'HIGH': 5, 'MEDIUM': 2, 'LOW': 0.5}[cluster]
-                    candidates.append((contrib * priority, name, idx))
-
+                    # Individual priority: lower priority = reduce first
+                    # Invert appliance_priority so LOW priority gets reduced first
+                    indiv_priority = self.appliance_priority.get(
+                        name,
+                        {'HIGH': 0.5, 'MEDIUM': 2, 'LOW': 5}[
+                            self.clusters.get(name, 'MEDIUM')
+                        ]
+                    )
+                    # Invert: high priority appliances should NOT be reduced
+                    reduction_score = contrib * (1.0 / max(indiv_priority, 0.1))
+                    candidates.append((reduction_score, name, idx))
+                    
             if not candidates:
                 break
 
