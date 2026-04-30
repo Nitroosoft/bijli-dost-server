@@ -1,7 +1,3 @@
-# =============================================================================
-# server.py — FINAL VERSION with Gemini Bill Scanner (New SDK)
-# =============================================================================
-
 import time
 import os
 from flask import Flask, request, jsonify
@@ -19,26 +15,23 @@ import PIL.Image
 app = Flask(__name__)
 CORS(app)
 
-# ── Gemini Setup ──────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 
-# =============================================================================
-# ROUTE 1: Health Check
-# =============================================================================
+# SECTION 1: HEALTH CHECK
+
 @app.route("/", methods=["GET"])
 def health():
     return jsonify({
         "status"  : "running",
         "project" : "Bijli-Dost AI Slab Scheduler",
-        "team"    : "Knight Riders — FAST-NUCES"
+        "team"    : "NITROSOFT — FAST-NUCES"
     })
 
 
-# =============================================================================
-# ROUTE 2: Get All Appliances
-# =============================================================================
+# SECTION 2: GET ALL APPLIANCES
+
 @app.route("/appliances", methods=["GET"])
 def get_appliances():
     data = []
@@ -54,9 +47,8 @@ def get_appliances():
     return jsonify({"appliances": data})
 
 
-# =============================================================================
-# ROUTE 3: Run AI Optimizer
-# =============================================================================
+# SECTION 3: RUN AI OPTIMIZER
+
 @app.route("/optimize", methods=["POST"])
 def optimize():
     body             = request.get_json()
@@ -72,7 +64,6 @@ def optimize():
     csp    = BijliDostCSP(appliances_input, units_consumed, days_remaining)
     result = csp.solve(restarts=8)
 
-   # ── Get quantities sent from app ──────────────────────────────────────────
     quantities = body.get("quantities", {})
 
     schedule_detail = []
@@ -88,45 +79,21 @@ def optimize():
         else:
             change = "Kept as preferred"
 
-        # ── Smart per-unit ON/OFF breakdown ───────────────────────────────────
         unit_schedule = []
         if qty > 1:
-            # hours_per_unit = what user wanted per single unit
             hours_per_unit = user_pref / qty
-
-            # How many units can we fully run within ai_hours budget?
             units_on  = min(qty, int(ai_hours // hours_per_unit)) if hours_per_unit > 0 else 0
             remainder = round(ai_hours - (units_on * hours_per_unit), 1)
 
             for i in range(qty):
                 if i < units_on:
-                    # Full hours for this unit
-                    unit_schedule.append({
-                        "unit"  : i + 1,
-                        "hours" : hours_per_unit,
-                        "on"    : True,
-                    })
+                    unit_schedule.append({"unit": i + 1, "hours": hours_per_unit, "on": True})
                 elif i == units_on and remainder > 0:
-                    # Partial hours for one unit if remainder exists
-                    unit_schedule.append({
-                        "unit"  : i + 1,
-                        "hours" : remainder,
-                        "on"    : True,
-                    })
+                    unit_schedule.append({"unit": i + 1, "hours": remainder, "on": True})
                 else:
-                    # This unit is OFF
-                    unit_schedule.append({
-                        "unit"  : i + 1,
-                        "hours" : 0,
-                        "on"    : False,
-                    })
+                    unit_schedule.append({"unit": i + 1, "hours": 0, "on": False})
         else:
-            # Single unit — simple on/off
-            unit_schedule.append({
-                "unit"  : 1,
-                "hours" : ai_hours,
-                "on"    : ai_hours > 0,
-            })
+            unit_schedule.append({"unit": 1, "hours": ai_hours, "on": ai_hours > 0})
 
         schedule_detail.append({
             "key"          : key,
@@ -151,9 +118,8 @@ def optimize():
     })
 
 
-# =============================================================================
-# ROUTE 4: Bill Scanner V1 — Original
-# =============================================================================
+# SECTION 4: BILL SCANNER V1
+
 @app.route("/scan-bill", methods=["POST"])
 def scan_bill():
     try:
@@ -261,21 +227,17 @@ Nothing else. No extra text.
 
     except Exception as e:
         print(f"Scan error: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error"  : f"Scan failed: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "error": f"Scan failed: {str(e)}"}), 500
 
 
-# =============================================================================
-# ROUTE 5: Bill Scanner V2 — Bill Photo + Meter Photo
-# =============================================================================
+# SECTION 5: BILL SCANNER V2
+
 @app.route("/scan-bill-v2", methods=["POST"])
 def scan_bill_v2():
     try:
         body      = request.get_json()
         image_b64 = body.get("image")
-        scan_type = body.get("scan_type", "bill")  # "bill" or "meter"
+        scan_type = body.get("scan_type", "bill")
 
         if not image_b64:
             return jsonify({"error": "No image provided"}), 400
@@ -283,7 +245,6 @@ def scan_bill_v2():
         image_data = base64.b64decode(image_b64)
         image_pil  = PIL.Image.open(io.BytesIO(image_data))
 
-        # ── BILL SCAN ─────────────────────────────────────────────────────────
         if scan_type == "bill":
             disco_name = body.get("disco_name", "")
             disco_full = body.get("disco_full", "")
@@ -308,7 +269,6 @@ ERROR: Could not read bill
 Nothing else. No extra text.
 """
 
-        # ── METER SCAN ────────────────────────────────────────────────────────
         else:
             prompt = """
 You are analyzing a Pakistani electricity meter photo.
@@ -324,7 +284,6 @@ ERROR: Could not read meter
 Nothing else. No extra text.
 """
 
-        # ── Retry logic ───────────────────────────────────────────────────────
         response   = None
         last_error = None
         for attempt in range(3):
@@ -344,7 +303,6 @@ Nothing else. No extra text.
 
         text = response.text.strip()
 
-        # ── Handle Bill Response ──────────────────────────────────────────────
         if scan_type == "bill":
             if "WRONG_COMPANY:" in text:
                 actual_company = text.split("WRONG_COMPANY:")[1].strip()
@@ -369,7 +327,6 @@ Nothing else. No extra text.
                     nums = re.findall(r'\d+\.?\d*', line)
                     if nums: current_reading = float(nums[0])
                 elif 'READING_DATE:' in line:
-                    # Extract date in DD/MM/YYYY format
                     date_match = re.search(r'(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})', line)
                     if date_match:
                         d, m, y = date_match.groups()
@@ -378,16 +335,10 @@ Nothing else. No extra text.
                         reading_date = f"{d.zfill(2)}/{m.zfill(2)}/{y}"
 
             if current_reading is None:
-                return jsonify({
-                    "success": False,
-                    "error"  : "Could not extract meter reading from bill."
-                })
+                return jsonify({"success": False, "error": "Could not extract meter reading from bill."})
 
             if reading_date is None:
-                return jsonify({
-                    "success": False,
-                    "error"  : "Could not extract reading date from bill."
-                })
+                return jsonify({"success": False, "error": "Could not extract reading date from bill."})
 
             return jsonify({
                 "success"        : True,
@@ -396,13 +347,9 @@ Nothing else. No extra text.
                 "message"        : f"Bill reading {current_reading} on {reading_date}"
             })
 
-        # ── Handle Meter Response ─────────────────────────────────────────────
         else:
             if "ERROR:" in text:
-                return jsonify({
-                    "success": False,
-                    "error"  : "Could not read meter clearly. Please take a clearer photo."
-                })
+                return jsonify({"success": False, "error": "Could not read meter clearly. Please take a clearer photo."})
 
             meter_reading = None
             for line in text.split('\n'):
@@ -411,10 +358,7 @@ Nothing else. No extra text.
                     if nums: meter_reading = float(nums[0])
 
             if meter_reading is None:
-                return jsonify({
-                    "success": False,
-                    "error"  : "Could not extract reading from meter photo."
-                })
+                return jsonify({"success": False, "error": "Could not extract reading from meter photo."})
 
             return jsonify({
                 "success"      : True,
@@ -424,13 +368,9 @@ Nothing else. No extra text.
 
     except Exception as e:
         print(f"Scan V2 error: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error"  : f"Scan failed: {str(e)}"
-        }), 500
+        return jsonify({"success": False, "error": f"Scan failed: {str(e)}"}), 500
 
 
-# =============================================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

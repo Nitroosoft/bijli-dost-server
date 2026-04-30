@@ -1,10 +1,3 @@
-# =============================================================================
-# main.py
-# Entry Point & CLI Interface
-# Project: Bijli-Dost — AI Slab Scheduler
-# FINAL VERSION: Impossible case handled + table header fixed
-# =============================================================================
-
 import os
 import time
 from nepra_rules import (
@@ -16,9 +9,7 @@ from nepra_rules import (
 from csp_solver import BijliDostCSP
 
 
-# =============================================================================
 # SECTION 1: UI HELPER FUNCTIONS
-# =============================================================================
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -26,8 +17,8 @@ def clear_screen():
 
 def print_banner():
     print("=" * 65)
-    print("       ⚡  BIJLI-DOST — AI Electricity Slab Scheduler  ⚡")
-    print("          Powered by CSP + Hill Climbing AI Engine")
+    print("         BIJLI-DOST — AI Electricity Slab Scheduler  ⚡")
+    print("         Powered by CSP + Hill Climbing AI Engine")
     print("        Keeping Pakistani Homes Under 199 Units!")
     print("=" * 65)
 
@@ -44,9 +35,9 @@ def get_valid_float(prompt: str, min_val: float, max_val: float) -> float:
             val = float(input(prompt))
             if min_val <= val <= max_val:
                 return val
-            print(f"  ⚠  Please enter a value between {min_val} and {max_val}.")
+            print(f"Please enter a value between {min_val} and {max_val}.")
         except ValueError:
-            print("  ⚠  Invalid input. Please enter a number.")
+            print("Invalid input. Please enter a number.")
 
 
 def get_valid_int(prompt: str, min_val: int, max_val: int) -> int:
@@ -55,44 +46,96 @@ def get_valid_int(prompt: str, min_val: int, max_val: int) -> int:
             val = int(input(prompt))
             if min_val <= val <= max_val:
                 return val
-            print(f"  ⚠  Please enter a value between {min_val} and {max_val}.")
+            print(f"Please enter a value between {min_val} and {max_val}.")
         except ValueError:
-            print("  ⚠  Invalid input. Please enter a whole number.")
+            print("Invalid input. Please enter a whole number.")
 
 
-# =============================================================================
 # SECTION 2: APPLIANCE MENU
-# =============================================================================
 
 APPLIANCE_MENU = [
     ("── Cooling & Heating ──────────────────", None),
+    ("AC 0.75-Ton",         "AC_0.75_ton"),
     ("AC 1-Ton",            "AC_1_ton"),
     ("AC 1.5-Ton",          "AC_1.5_ton"),
     ("AC 2-Ton",            "AC_2_ton"),
+    ("AC 2.5-Ton",          "AC_2.5_ton"),
+    ("Window AC 1-Ton",     "window_ac_1ton"),
     ("Ceiling Fan",         "ceiling_fan"),
+    ("Inverter Fan",        "inverter_fan"),
     ("Pedestal Fan",        "pedestal_fan"),
+    ("Table Fan",           "table_fan"),
+    ("Exhaust Fan",         "exhaust_fan"),
     ("Air Cooler",          "cooler"),
+    ("Room Heater",         "room_heater"),
     ("── Kitchen ───────────────────────────", None),
-    ("Refrigerator",        "refrigerator"),
+    ("Refrigerator Small",  "refrigerator_small"),
+    ("Refrigerator Medium", "refrigerator_medium"),
+    ("Refrigerator Large",  "refrigerator_large"),
     ("Deep Freezer",        "deep_freezer"),
     ("Microwave",           "microwave"),
     ("Electric Kettle",     "electric_kettle"),
     ("Toaster",             "toaster"),
-    ("Washing Machine",     "washing_machine"),
+    ("Washing Machine Semi","washing_machine_semi"),
+    ("Washing Machine Auto","washing_machine_auto"),
+    ("Electric Oven",       "electric_oven"),
+    ("Induction Cooker",    "induction_cooker"),
+    ("Blender / Juicer",    "blender_juicer"),
+    ("Food Processor",      "food_processor"),
+    ("Rice Cooker",         "rice_cooker"),
+    ("Dishwasher",          "dishwasher"),
+    ("Electric Iron",       "electric_iron"),
+    ("Roti Maker",          "roti_maker"),
     ("── Lighting ──────────────────────────", None),
     ("LED Bulb",            "led_bulb"),
     ("Energy Saver (CFL)",  "energy_saver"),
     ("Tube Light",          "tube_light"),
-    ("── Entertainment & Office ────────────", None),
+    ("LED Tube",            "led_tube"),
+    ("LED Strip",           "led_strip"),
+    ("Downlight LED",       "downlight_led"),
+    ("── Entertainment ─────────────────────", None),
+    ("LED TV 24-inch",      "tv_led_24"),
     ("LED TV 32-inch",      "tv_led_32"),
+    ("LED TV 40-inch",      "tv_led_40"),
+    ("LED TV 43-inch",      "tv_led_43"),
+    ("LED TV 50-inch",      "tv_led_50"),
     ("LED TV 55-inch",      "tv_led_55"),
+    ("LED TV 65-inch",      "tv_led_65"),
+    ("LED TV 75-inch",      "tv_led_75"),
+    ("LED TV 85-inch",      "tv_led_85"),
+    ("PS4 / PS5",           "ps4_ps5"),
+    ("Xbox",                "xbox"),
+    ("Set-Top Box",         "set_top_box"),
+    ("Home Theater",        "home_theater"),
+    ("── Computers & Office ────────────────", None),
     ("Laptop",              "laptop"),
     ("Desktop PC",          "desktop_pc"),
+    ("LED Monitor",         "monitor_led"),
     ("Wi-Fi Router",        "wifi_router"),
-    ("── Utilities ─────────────────────────", None),
-    ("Water Pump",          "water_pump"),
-    ("Electric Geyser",     "geyser_electric"),
-    ("Clothes Iron",        "iron"),
+    ("Inkjet Printer",      "printer_inkjet"),
+    ("Laser Printer",       "printer_laser"),
+    ("── Utilities & Water ─────────────────", None),
+    ("Water Pump 0.5HP",    "water_pump_0.5hp"),
+    ("Water Pump 1HP",      "water_pump_1hp"),
+    ("Water Pump 1.5HP",    "water_pump_1.5hp"),
+    ("Submersible Pump",    "submersible_pump"),
+    ("Geyser Small (15L)",  "geyser_electric_small"),
+    ("Geyser Large (25L+)", "geyser_electric_large"),
+    ("Immersion Rod",       "immersion_rod"),
+    ("── Backup & Security ─────────────────", None),
+    ("UPS 500VA",           "ups_500va"),
+    ("UPS 1000VA",          "ups_1000va"),
+    ("UPS 1500VA",          "ups_1500va"),
+    ("Home Inverter",       "inverter_home"),
+    ("Solar Inverter",      "solar_inverter"),
+    ("Security Camera",     "security_cam"),
+    ("Doorbell Camera",     "doorbell_cam"),
+    ("Air Purifier",        "air_purifier"),
+    ("── Personal Care ─────────────────────", None),
+    ("Hair Dryer",          "hair_dryer"),
+    ("Hair Straightener",   "hair_straightener"),
+    ("Electric Shaver",     "electric_shaver"),
+    ("Electric Blanket",    "electric_blanket"),
 ]
 
 
@@ -124,23 +167,23 @@ def collect_appliances(number_to_key: dict) -> dict:
         try:
             choice = int(input("  Enter appliance number (0 = done): "))
         except ValueError:
-            print("  ⚠  Please enter a valid number.")
+            print("Please enter a valid number.")
             continue
 
         if choice == 0:
             if not selected:
-                print("  ⚠  Please select at least one appliance.")
+                print("Please select at least one appliance.")
                 continue
             break
 
         if choice not in number_to_key:
-            print(f"  ⚠  Invalid choice. Pick between 1 and {max(number_to_key)}.")
+            print(f"Invalid choice. Pick between 1 and {max(number_to_key)}.")
             continue
 
         display_name, key = number_to_key[choice]
 
         if key in selected:
-            print(f"  ⚠  {display_name} already added.")
+            print(f"{display_name} already added.")
             continue
 
         constraints = APPLIANCE_CONSTRAINTS[key]
@@ -148,7 +191,7 @@ def collect_appliances(number_to_key: dict) -> dict:
         hi          = constraints["max_hours"]
         watts       = APPLIANCES[key]
 
-        print(f"\n  ✔  {display_name} selected ({watts}W)")
+        print(f"\n  {display_name} selected ({watts}W)")
         print(f"     Allowed range: {lo}h – {hi}h per day")
 
         hours = get_valid_float(
@@ -161,42 +204,38 @@ def collect_appliances(number_to_key: dict) -> dict:
     return selected
 
 
-# =============================================================================
 # SECTION 3: RESULTS DISPLAY
-# =============================================================================
 
 def display_warning_banner(warning_level: str, total_units: float):
     if warning_level == "SAFE":
-        print("\n  ✅  STATUS: SAFE — You are comfortably within the slab!")
+        print("\nSTATUS: SAFE — You are comfortably within the slab!")
     elif warning_level == "WARNING":
-        print("\n  ⚠️   STATUS: WARNING — Getting close to the limit!")
+        print("\nSTATUS: WARNING — Getting close to the limit!")
     elif warning_level == "CRITICAL":
-        print("\n  🔴  STATUS: CRITICAL — Only a tiny buffer left!")
+        print("\nSTATUS: CRITICAL — Only a tiny buffer left!")
     else:
-        print("\n  ❌  STATUS: EXCEEDED — You have crossed the 199-unit limit!")
+        print("\nSTATUS: EXCEEDED — You have crossed the 199-unit limit!")
 
     print(f"      Projected total: {total_units} units / {PROTECTED_SLAB_LIMIT} limit")
 
 
 def display_schedule(result: dict, selected_appliances: dict, days_remaining: int):
-    print_section("⚡ BIJLI-DOST OPTIMIZED SCHEDULE")
+    print_section("BIJLI-DOST OPTIMIZED SCHEDULE")
 
-    # ── Impossible case — show clear message and exit early ─────────────
     if result.get("impossible"):
-        print("\n  ❌  MATHEMATICALLY IMPOSSIBLE SCENARIO DETECTED")
+        print("\n MATHEMATICALLY IMPOSSIBLE SCENARIO DETECTED")
         print(f"  {'─' * 60}")
         print("  Even running all appliances at MINIMUM allowed hours")
         print("  exceeds the 199-unit protected slab given your current")
         print("  consumption this month.")
         print(f"\n  Minimum possible total : {result['total_units']} units")
         print(f"  Protected slab limit   : {PROTECTED_SLAB_LIMIT} units")
-        print(f"\n  💡 RECOMMENDATIONS:")
+        print(f"\n  RECOMMENDATIONS:")
         print("  → You have already lost the protected slab this month.")
         print("  → Remove heavy appliances like AC, Geyser, Deep Freezer.")
         print("  → Re-run Bijli-Dost at the start of next billing cycle.")
         return
 
-    # ── Normal schedule table ────────────────────────────────────────────
     schedule = result["schedule"]
 
     print(f"\n  {'Appliance':<22} {'Your Pref':>10} {'AI Recommends':>14} {'Daily kWh':>10}")
@@ -228,11 +267,10 @@ def display_schedule(result: dict, selected_appliances: dict, days_remaining: in
 
 
 def display_tips(result: dict):
-    # Skip tips for impossible case
     if result.get("impossible"):
         return
 
-    print_section("💡 BIJLI-DOST TIPS")
+    print_section("BIJLI-DOST TIPS")
 
     schedule        = result["schedule"]
     biggest         = max(schedule, key=lambda n: (APPLIANCES[n] * schedule[n]) / 1000)
@@ -242,12 +280,12 @@ def display_tips(result: dict):
     print(f"     Even 1 hour less per day makes a big difference.\n")
 
     if result["units_saved"] < 2:
-        print("  2. 🔴 Buffer is very tight. Avoid adding any new appliance usage.")
+        print("  2. Buffer is very tight. Avoid adding any new appliance usage.")
         print("     One extra hour of AC could push you over 199 units!\n")
     elif result["units_saved"] < 5:
-        print("  2. ⚠  Small buffer. Try to follow the schedule strictly.\n")
+        print("  2. Small buffer. Try to follow the schedule strictly.\n")
     else:
-        print("  2. ✅ Good buffer. You have some flexibility in daily usage.\n")
+        print("  2. Good buffer. You have some flexibility in daily usage.\n")
 
     print("  3. Run your washing machine and iron during off-peak hours.")
     print("     This doesn't save units but reduces grid stress.")
@@ -255,15 +293,12 @@ def display_tips(result: dict):
     print("     to recalculate your schedule immediately.\n")
 
 
-# =============================================================================
 # SECTION 4: MAIN APPLICATION FLOW
-# =============================================================================
 
 def main():
     clear_screen()
     print_banner()
 
-    # ── STEP 1: Billing Info ────────────────────────────────────────────────
     print_section("STEP 1 — Enter Your Billing Information")
     print("\n  This information is on your WAPDA/DISCO electricity bill.")
 
@@ -277,9 +312,9 @@ def main():
     print(f"  Warning level    : {get_warning_level(units_consumed)}")
 
     if units_consumed >= PROTECTED_SLAB_LIMIT:
-        print("\n  ❌ You have already exceeded the 199-unit protected slab.")
-        print("     Bijli-Dost can no longer save your slab this month.")
-        print("     Run again at the start of next billing cycle.")
+        print("\nYou have already exceeded the 199-unit protected slab.")
+        print("  Bijli-Dost can no longer save your slab this month.")
+        print("  Run again at the start of next billing cycle.")
         return
 
     days_remaining = get_valid_int(
@@ -287,30 +322,26 @@ def main():
         1, 30
     )
 
-    # ── STEP 2: Select Appliances ───────────────────────────────────────────
     number_to_key = show_appliance_menu()
     selected      = collect_appliances(number_to_key)
 
-    # ── STEP 3: Run AI Solver ───────────────────────────────────────────────
     print_section("STEP 3 — AI Optimizer Running...")
-    print("\n  🤖 Formulating CSP variables and domains...")
+    print("\nFormulating CSP variables and domains...")
     time.sleep(0.8)
-    print("  🔍 Running Hill Climbing with Random Restarts...")
+    print("Running Hill Climbing with Random Restarts...")
     time.sleep(0.8)
-    print("  🔧 Applying Min-Conflicts repair if needed...")
+    print("Applying Min-Conflicts repair if needed...")
     time.sleep(0.6)
-    print("  ✅ Optimal schedule found!\n")
+    print("Optimal schedule found!\n")
 
     csp    = BijliDostCSP(selected, units_consumed, days_remaining)
     result = csp.solve(restarts=8)
 
-    # ── STEP 4: Display Results ─────────────────────────────────────────────
     clear_screen()
     print_banner()
     display_schedule(result, selected, days_remaining)
     display_tips(result)
 
-    # ── STEP 5: Run Again? ──────────────────────────────────────────────────
     print_section("Run Again?")
     again = input("\n  Would you like to try a different scenario? (y/n): ").strip().lower()
     if again == 'y':
@@ -321,6 +352,5 @@ def main():
         print("=" * 65)
 
 
-# =============================================================================
 if __name__ == "__main__":
     main()
